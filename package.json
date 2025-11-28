@@ -1,0 +1,116 @@
+{
+  "name": "react-form-autosave",
+  "version": "0.1.2",
+  "description": "Zero-dependency React library for automatically persisting form state to localStorage/sessionStorage with SSR support, tab sync, undo/redo, and GDPR compliance",
+  "author": "686f6c61",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/686f6c61/react-form-autosave.git"
+  },
+  "bugs": {
+    "url": "https://github.com/686f6c61/react-form-autosave/issues"
+  },
+  "homepage": "https://react-form-autosave.onrender.com",
+  "keywords": [
+    "react",
+    "form",
+    "persist",
+    "localStorage",
+    "sessionStorage",
+    "autosave",
+    "form-state",
+    "hooks",
+    "typescript",
+    "undo-redo",
+    "tab-sync",
+    "gdpr"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./history": {
+      "import": "./dist/history.esm.js",
+      "require": "./dist/history.js",
+      "types": "./dist/history.d.ts"
+    },
+    "./sync": {
+      "import": "./dist/sync.esm.js",
+      "require": "./dist/sync.js",
+      "types": "./dist/sync.d.ts"
+    },
+    "./devtools": {
+      "import": "./dist/devtools.esm.js",
+      "require": "./dist/devtools.js",
+      "types": "./dist/devtools.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing.esm.js",
+      "require": "./dist/testing.js",
+      "types": "./dist/testing.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "type-check": "tsc --noEmit",
+    "prepublishOnly": "npm run lint && npm run test && npm run build",
+    "size": "size-limit",
+    "demo": "cd demo && npm run dev"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@size-limit/preset-small-lib": "^11.0.2",
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.2.1",
+    "@types/jest": "^29.5.12",
+    "@types/react": "^18.2.64",
+    "@typescript-eslint/eslint-plugin": "^7.1.1",
+    "@typescript-eslint/parser": "^7.1.1",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "rollup": "^4.12.0",
+    "rollup-plugin-dts": "^6.1.0",
+    "size-limit": "^11.0.2",
+    "ts-jest": "^29.1.2",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.2"
+  },
+  "size-limit": [
+    {
+      "path": "dist/index.esm.js",
+      "limit": "2 KB"
+    }
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
