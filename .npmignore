@@ -1,0 +1,38 @@
+# ====================
+# Source (not needed in package)
+# ====================
+src/
+demo/
+
+# ====================
+# Config files
+# ====================
+.eslintrc.js
+.prettierrc
+jest.config.js
+rollup.config.js
+tsconfig.json
+render.yaml
+CONTRIBUTING.md
+
+# ====================
+# Git
+# ====================
+.gitignore
+.git/
+
+# ====================
+# Development
+# ====================
+node_modules/
+coverage/
+*.log
+
+# ====================
+# IDE / Editor
+# ====================
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store

@@ -1,0 +1,32 @@
+# react-form-autosave
+# @version 0.1.0
+# @author 686f6c61
+# @license MIT
+# @repository https://github.com/686f6c61/react-form-autosave
+#
+# Render deployment configuration for demo site
+# Deploy URL: https://react-form-autosave.onrender.com
+
+services:
+  - type: web
+    name: react-form-autosave
+    runtime: static
+    buildCommand: |
+      npm ci
+      npm run build
+      cd demo
+      npm ci
+      npm run build
+    staticPublishPath: demo/dist
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
