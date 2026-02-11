@@ -10,7 +10,7 @@ demo/
 .eslintrc.js
 .prettierrc
 jest.config.js
-rollup.config.js
+rollup.config.mjs
 tsconfig.json
 render.yaml
 CONTRIBUTING.md

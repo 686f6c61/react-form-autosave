@@ -234,7 +234,7 @@ describe('testUtils', () => {
       const storage = createMockStorage();
 
       simulateStorageFull(storage);
-      (storage as any).restoreSetItem();
+      (storage as unknown as { restoreSetItem: () => void }).restoreSetItem();
 
       expect(() => storage.setItem('key', 'value')).not.toThrow();
     });

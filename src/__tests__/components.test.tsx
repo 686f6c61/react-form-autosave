@@ -15,6 +15,7 @@ import {
   useFormRegistry,
 } from '../components/FormPersistProvider';
 import { AutoSaveIndicator } from '../components/AutoSaveIndicator';
+import type { FormPersistRegistryEntry } from '../core/types';
 
 // Helper component to test context
 function ContextConsumer() {
@@ -25,9 +26,17 @@ function ContextConsumer() {
 // Helper component to test registry
 function RegistryConsumer() {
   const registry = useFormRegistry();
+  const entry: FormPersistRegistryEntry = {
+    key: 'test',
+    state: {},
+    lastSaved: null,
+    size: 0,
+    isPaused: false,
+  };
+
   return (
     <div>
-      <button onClick={() => registry.register('test', { data: {} } as any)}>
+      <button onClick={() => registry.register('test', entry)}>
         Register
       </button>
       <button onClick={() => registry.unregister('test')}>Unregister</button>
@@ -165,6 +174,18 @@ describe('AutoSaveIndicator', () => {
     render(<AutoSaveIndicator lastSaved={lastSaved} />);
 
     expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('should render saved text without timestamp when showTimestamp is false', () => {
+    render(
+      <AutoSaveIndicator
+        lastSaved={Date.now()}
+        savedText="Saved"
+        showTimestamp={false}
+      />
+    );
+
+    expect(screen.getByText('Saved')).toBeInTheDocument();
   });
 
   it('should use custom text props', () => {

@@ -41,7 +41,7 @@ describe('merge', () => {
       const stored = 'stored value';
       const initial = 'initial value';
 
-      const result = shallowMerge(stored as any, initial as any);
+      const result = shallowMerge<string>(stored, initial);
 
       expect(result).toBe('stored value');
     });
@@ -50,7 +50,10 @@ describe('merge', () => {
       const stored = undefined;
       const initial = { name: 'default' };
 
-      const result = shallowMerge(stored as any, initial);
+      const result = shallowMerge<{ name: string }>(
+        stored as unknown as Partial<{ name: string }>,
+        initial
+      );
 
       expect(result).toEqual({ name: 'default' });
     });
@@ -90,7 +93,7 @@ describe('merge', () => {
       const stored = 'string';
       const initial = { obj: true };
 
-      const result = deepMerge(stored as any, initial);
+      const result = deepMerge<string | { obj: boolean }>(stored, initial);
 
       expect(result).toBe('string');
     });
@@ -99,7 +102,10 @@ describe('merge', () => {
       const stored = null;
       const initial = { name: 'default' };
 
-      const result = deepMerge(stored as any, initial);
+      const result = deepMerge<{ name: string }>(
+        stored as unknown as Partial<{ name: string }>,
+        initial
+      );
 
       expect(result).toEqual({ name: 'default' });
     });
@@ -111,7 +117,7 @@ describe('merge', () => {
       const result = deepMerge(maliciousStored, initial);
 
       // Should not pollute Object prototype
-      expect(({} as any).polluted).toBeUndefined();
+      expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
       // Should still merge safe keys
       expect(result.name).toBe('safe');
     });
@@ -120,7 +126,7 @@ describe('merge', () => {
       const maliciousStored = { constructor: { polluted: true }, name: 'safe' };
       const initial = { name: '', email: '' };
 
-      const result = deepMerge(maliciousStored as any, initial);
+      const result = deepMerge(maliciousStored, initial);
 
       expect(result.name).toBe('safe');
       // Constructor should remain the default Object constructor, not overwritten
@@ -178,9 +184,9 @@ describe('merge', () => {
 
     it('should handle null initial values', () => {
       const stored = { value: 'stored' };
-      const initial = { value: null };
+      const initial: { value: string | null } = { value: null };
 
-      const result = preferInitialMerge(stored, initial as any);
+      const result = preferInitialMerge(stored, initial);
 
       expect(result).toEqual({ value: 'stored' });
     });
@@ -207,7 +213,7 @@ describe('merge', () => {
       const stored = { name: 'John' };
       const initial = 'not an object';
 
-      const result = preferInitialMerge(stored, initial as any);
+      const result = preferInitialMerge<{ name: string } | string>(stored, initial);
 
       expect(result).toBe('not an object');
     });
@@ -253,7 +259,7 @@ describe('merge', () => {
     });
 
     it('should default to shallowMerge for unknown strategy', () => {
-      const fn = getMergeFunction('unknown' as any);
+      const fn = getMergeFunction('unknown' as unknown as 'shallow');
       const result = fn({ a: 1 }, { a: 0, b: 0 });
       expect(result).toEqual({ a: 1, b: 0 });
     });

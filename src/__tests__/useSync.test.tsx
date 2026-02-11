@@ -182,6 +182,43 @@ describe('useSync', () => {
       expect(true).toBe(true);
     });
 
+    it('should call latest onUpdate callback when sync event arrives', () => {
+      let storageHandler: ((event: StorageEvent) => void) | null = null;
+      (window.addEventListener as jest.Mock).mockImplementation((type, handler) => {
+        if (type === 'storage') {
+          storageHandler = handler as (event: StorageEvent) => void;
+        }
+      });
+
+      const onUpdate1 = jest.fn();
+      const onUpdate2 = jest.fn();
+      const options: SyncOptions<TestData> = { enabled: true };
+
+      const { rerender } = renderHook(
+        ({ callback }) => useSync('test-key', options, callback),
+        {
+          initialProps: { callback: onUpdate1 },
+        }
+      );
+
+      rerender({ callback: onUpdate2 });
+
+      act(() => {
+        storageHandler?.(
+          new StorageEvent('storage', {
+            key: 'test-key',
+            newValue: JSON.stringify({ data: { name: 'synced', value: 7 } }),
+          })
+        );
+      });
+
+      expect(onUpdate1).not.toHaveBeenCalled();
+      expect(onUpdate2).toHaveBeenCalledWith(
+        { name: 'synced', value: 7 },
+        'storage'
+      );
+    });
+
     it('should handle enabled toggle', () => {
       const onUpdate = jest.fn();
 

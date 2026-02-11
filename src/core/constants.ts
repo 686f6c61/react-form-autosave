@@ -18,7 +18,7 @@ export const LIBRARY_NAME = 'react-form-autosave';
 /**
  * Current library version
  */
-export const VERSION = '0.1.2';
+export const VERSION = '0.2.0';
 
 /**
  * Default storage key prefix

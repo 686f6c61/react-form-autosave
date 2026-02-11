@@ -134,9 +134,12 @@ describe('validate', () => {
 
     it('should call migrate function when migration needed', () => {
       const data = { firstName: 'John', lastName: 'Doe' };
-      const migrate = jest.fn((oldData: any, _oldVersion: number) => ({
-        fullName: `${oldData.firstName} ${oldData.lastName}`,
-      }));
+      const migrate = jest.fn((oldData: unknown, _oldVersion: number) => {
+        const typed = oldData as { firstName: string; lastName: string };
+        return {
+          fullName: `${typed.firstName} ${typed.lastName}`,
+        };
+      });
 
       const result = migrateData(data, 1, 2, migrate);
 
@@ -268,12 +271,12 @@ describe('validate', () => {
     });
 
     it('should return true when validation passes', () => {
-      const validate = (data: any) => data.name.length > 0;
+      const validate = (data: { name: string }) => data.name.length > 0;
       expect(validateData({ name: 'John' }, validate)).toBe(true);
     });
 
     it('should return false when validation fails', () => {
-      const validate = (data: any) => data.name.length > 10;
+      const validate = (data: { name: string }) => data.name.length > 10;
       expect(validateData({ name: 'John' }, validate)).toBe(false);
     });
 

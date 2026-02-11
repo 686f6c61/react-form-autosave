@@ -35,17 +35,17 @@
  * cancel();
  * ```
  */
-export function createDebouncedFn<T extends (...args: Parameters<T>) => void>(
-  callback: T,
+export function createDebouncedFn<TArgs extends unknown[]>(
+  callback: (...args: TArgs) => void,
   wait: number
 ): {
-  debounced: (...args: Parameters<T>) => void;
+  debounced: (...args: TArgs) => void;
   cancel: () => void;
   flush: () => void;
   pending: () => boolean;
 } {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let lastArgs: Parameters<T> | null = null;
+  let lastArgs: TArgs | null = null;
 
   const cancel = (): void => {
     if (timeoutId !== null) {
@@ -67,7 +67,7 @@ export function createDebouncedFn<T extends (...args: Parameters<T>) => void>(
     return timeoutId !== null;
   };
 
-  const debounced = (...args: Parameters<T>): void => {
+  const debounced = (...args: TArgs): void => {
     lastArgs = args;
 
     if (timeoutId !== null) {
@@ -112,16 +112,16 @@ export function createDebouncedFn<T extends (...args: Parameters<T>) => void>(
  * // After 1000ms, next call will execute
  * ```
  */
-export function createThrottledFn<T extends (...args: Parameters<T>) => void>(
-  callback: T,
+export function createThrottledFn<TArgs extends unknown[]>(
+  callback: (...args: TArgs) => void,
   interval: number
 ): {
-  throttled: (...args: Parameters<T>) => void;
+  throttled: (...args: TArgs) => void;
   cancel: () => void;
 } {
   let lastCall = 0;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let lastArgs: Parameters<T> | null = null;
+  let lastArgs: TArgs | null = null;
 
   const cancel = (): void => {
     if (timeoutId !== null) {
@@ -131,7 +131,7 @@ export function createThrottledFn<T extends (...args: Parameters<T>) => void>(
     lastArgs = null;
   };
 
-  const throttled = (...args: Parameters<T>): void => {
+  const throttled = (...args: TArgs): void => {
     const now = Date.now();
     const remaining = interval - (now - lastCall);
 
@@ -184,12 +184,12 @@ export function createThrottledFn<T extends (...args: Parameters<T>) => void>(
  * saveControl.save(formData);
  * ```
  */
-export function createSaveController<T extends (...args: Parameters<T>) => void>(
-  callback: T,
+export function createSaveController<TArgs extends unknown[]>(
+  callback: (...args: TArgs) => void,
   debounceWait: number,
   throttleInterval?: number
 ): {
-  save: (...args: Parameters<T>) => void;
+  save: (...args: TArgs) => void;
   cancel: () => void;
   flush: () => void;
   pending: () => boolean;
@@ -208,7 +208,7 @@ export function createSaveController<T extends (...args: Parameters<T>) => void>
   const throttle = createThrottledFn(callback, throttleInterval);
 
   return {
-    save: (...args: Parameters<T>) => {
+    save: (...args: TArgs) => {
       debounce.debounced(...args);
       throttle.throttled(...args);
     },

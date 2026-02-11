@@ -8,11 +8,16 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FormPersistDevTools } from '../devtools/FormPersistDevTools';
 import { DEFAULT_KEY_PREFIX } from '../core/constants';
 
 describe('FormPersistDevTools', () => {
+  type CreateElementWithOptions = (
+    tagName: string,
+    options?: ElementCreationOptions
+  ) => HTMLElement;
+
   beforeEach(() => {
     localStorage.clear();
     jest.useFakeTimers();
@@ -98,7 +103,9 @@ describe('FormPersistDevTools', () => {
     const clearButton = screen.getByRole('button', { name: 'Clear' });
     fireEvent.click(clearButton);
 
-    jest.advanceTimersByTime(2000);
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
 
     expect(localStorage.getItem(`${DEFAULT_KEY_PREFIX}testForm`)).toBeNull();
   });
@@ -182,12 +189,15 @@ describe('FormPersistDevTools', () => {
 
     const mockAnchor = { href: '', download: '', click: jest.fn() };
     const originalCreateElement = document.createElement.bind(document);
-    const createElementSpy = jest.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+    const createElementSpy = jest.spyOn(document, 'createElement').mockImplementation(((
+      tagName: string,
+      options?: ElementCreationOptions
+    ) => {
       if (tagName === 'a') {
-        return mockAnchor as any;
+        return mockAnchor as unknown as HTMLElement;
       }
-      return originalCreateElement(tagName);
-    });
+      return originalCreateElement(tagName, options);
+    }) as CreateElementWithOptions);
 
     render(<FormPersistDevTools defaultOpen={true} />);
 
@@ -302,7 +312,9 @@ describe('FormPersistDevTools', () => {
     localStorage.setItem(`${DEFAULT_KEY_PREFIX}autoRefresh`, JSON.stringify(data));
 
     // Advance timer for auto-refresh (2000ms interval)
-    jest.advanceTimersByTime(2100);
+    act(() => {
+      jest.advanceTimersByTime(2100);
+    });
 
     // Rerender to pick up changes
     rerender(<FormPersistDevTools defaultOpen={true} />);

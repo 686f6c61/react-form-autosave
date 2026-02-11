@@ -17,6 +17,7 @@ import {
   getStorageSize,
   clearStorageByPrefix,
 } from '../storage';
+import type { StorageAdapter } from '../core/types';
 
 describe('Storage Adapters', () => {
   beforeEach(() => {
@@ -117,7 +118,7 @@ describe('Storage Adapters', () => {
     });
 
     it('should handle null custom adapter', () => {
-      const adapter = getStorageAdapter(null as any);
+      const adapter = getStorageAdapter(null as unknown as StorageAdapter);
       // Should fallback to memory
       expect(adapter).toBeDefined();
     });
@@ -127,6 +128,26 @@ describe('Storage Adapters', () => {
 
       // removeItem should not throw even if item doesn't exist
       expect(() => adapter.removeItem('nonexistent')).not.toThrow();
+    });
+
+    it('should fallback to memory when localStorage is unavailable', () => {
+      const originalLocalStorage = window.localStorage;
+
+      try {
+        Object.defineProperty(window, 'localStorage', {
+          configurable: true,
+          value: undefined,
+        });
+
+        const adapter = getStorageAdapter('localStorage');
+        expect(() => adapter.setItem('fallback-key', 'value')).not.toThrow();
+        expect(adapter.getItem('fallback-key')).toBe('value');
+      } finally {
+        Object.defineProperty(window, 'localStorage', {
+          configurable: true,
+          value: originalLocalStorage,
+        });
+      }
     });
   });
 

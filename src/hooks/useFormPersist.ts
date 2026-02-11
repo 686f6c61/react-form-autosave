@@ -22,12 +22,19 @@ import type {
   FormPersistActions,
   UseFormPersistReturn,
   StorageAdapter,
+  MergeFn,
+  MergeStrategy,
+  PartitionOptions,
+  SyncOptions,
+  TransformOptions,
+  PersistedData,
 } from '../core/types';
 
 import {
   DEFAULT_OPTIONS,
   DEFAULT_KEY_PREFIX,
   DEFAULT_MAX_HISTORY,
+  DEFAULT_PARTITION_SIZE,
 } from '../core/constants';
 
 import { getStorageAdapter, isSSR, getStringByteSize } from '../storage';
@@ -48,6 +55,7 @@ import {
 } from '../middleware';
 
 import { useFormPersistContext } from '../components/FormPersistProvider';
+import { SyncManager } from '../sync/syncManager';
 
 /**
  * Debug logger utility
@@ -57,6 +65,72 @@ function debugLog(enabled: boolean, ...args: unknown[]): void {
     // eslint-disable-next-line no-console
     console.log('[react-form-autosave]', ...args);
   }
+}
+
+function isPromiseLike<T>(value: unknown): value is Promise<T> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
+}
+
+const PARTITION_MARKER = '__rfp_partitioned__';
+
+interface PartitionManifest {
+  __rfp_partitioned__: true;
+  count: number;
+}
+
+function parsePartitionManifest(raw: string): PartitionManifest | null {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const candidate = parsed as Record<string, unknown>;
+    const count = candidate.count;
+    if (
+      candidate[PARTITION_MARKER] === true &&
+      typeof count === 'number' &&
+      Number.isInteger(count) &&
+      count > 0
+    ) {
+      return {
+        __rfp_partitioned__: true,
+        count,
+      };
+    }
+  } catch {
+    // Not a partition manifest
+  }
+  return null;
+}
+
+function splitIntoPartitions(data: string, maxSizeBytes: number): string[] {
+  const chunkCharSize = Math.max(1, Math.floor(maxSizeBytes / 2));
+  const chunks: string[] = [];
+
+  for (let i = 0; i < data.length; i += chunkCharSize) {
+    chunks.push(data.slice(i, i + chunkCharSize));
+  }
+
+  return chunks;
+}
+
+function getDirtyData<T extends Record<string, unknown>>(
+  current: T,
+  initial: T
+): Partial<T> {
+  const dirty: Partial<T> = {};
+  for (const key of Object.keys(current) as (keyof T)[]) {
+    if (!isEqual(current[key], initial[key])) {
+      dirty[key] = current[key];
+    }
+  }
+  return dirty;
 }
 
 /**
@@ -99,13 +173,13 @@ export function useFormPersist<T extends Record<string, unknown>>(
   options: FormPersistOptions<T> = {}
 ): UseFormPersistReturn<T> {
   // Merge with context defaults
-  const contextDefaults = useFormPersistContext();
+  const contextDefaults = useFormPersistContext() as Partial<FormPersistOptions<T>>;
   const mergedOptions = useMemo(
     () => ({
       ...DEFAULT_OPTIONS,
       ...contextDefaults,
       ...options,
-    }),
+    }) as FormPersistOptions<T>,
     [contextDefaults, options]
   );
 
@@ -123,13 +197,57 @@ export function useFormPersist<T extends Record<string, unknown>>(
     version,
     migrate,
     compress,
+    sync,
+    history: historyOption,
     enabled,
     validate,
     beforePersist,
     debug,
     keyPrefix,
+    partition,
+    persistMode,
     warnSize,
   } = mergedOptions;
+
+  const syncOptions = useMemo<SyncOptions<T>>(() => {
+    if (!sync) {
+      return { enabled: false };
+    }
+    if (sync === true) {
+      return { enabled: true };
+    }
+    return {
+      ...sync,
+      enabled: sync.enabled ?? true,
+    };
+  }, [sync]);
+
+  const historyEnabled = useMemo(() => {
+    if (!historyOption) return false;
+    if (historyOption === true) return true;
+    return historyOption.enabled ?? true;
+  }, [historyOption]);
+
+  const maxHistory = useMemo(() => {
+    if (historyOption && typeof historyOption === 'object') {
+      return historyOption.maxHistory ?? DEFAULT_MAX_HISTORY;
+    }
+    return DEFAULT_MAX_HISTORY;
+  }, [historyOption]);
+
+  const partitionOptions = useMemo<Required<PartitionOptions>>(() => {
+    if (!partition) {
+      return { enabled: false, maxSize: DEFAULT_PARTITION_SIZE };
+    }
+    if (partition === true) {
+      return { enabled: true, maxSize: DEFAULT_PARTITION_SIZE };
+    }
+    const maxSize = Math.max(1, partition.maxSize ?? DEFAULT_PARTITION_SIZE);
+    return {
+      enabled: partition.enabled ?? true,
+      maxSize,
+    };
+  }, [partition]);
 
   // Compute full storage key
   /* istanbul ignore next -- @preserve Optional chaining branches */
@@ -137,6 +255,11 @@ export function useFormPersist<T extends Record<string, unknown>>(
     const prefix = keyPrefix ?? DEFAULT_KEY_PREFIX;
     return `${prefix}${key}`;
   }, [key, keyPrefix]);
+
+  const getPartitionKey = useCallback(
+    (index: number): string => `${fullKey}:part:${index}`,
+    [fullKey]
+  );
 
   // Get storage adapter
   const storage = useMemo<StorageAdapter>(
@@ -146,12 +269,23 @@ export function useFormPersist<T extends Record<string, unknown>>(
 
   // Create transform pipeline
   const transformer = useMemo(
-    () => createTransformPipeline(transform, compress, false),
+    () =>
+      createTransformPipeline<PersistedData<unknown>>(
+        transform as TransformOptions<PersistedData<unknown>> | undefined,
+        compress,
+        false
+      ),
     [transform, compress]
   );
 
   // Get merge function
-  const mergeFn = useMemo(() => getMergeFunction(mergeStrategy), [mergeStrategy]);
+  const mergeFn = useMemo(
+    () =>
+      getMergeFunction<T>(
+        mergeStrategy as MergeStrategy | MergeFn<T> | undefined
+      ),
+    [mergeStrategy]
+  );
 
   // State
   const [state, setStateInternal] = useState<T>(initialState);
@@ -168,12 +302,18 @@ export function useFormPersist<T extends Record<string, unknown>>(
   // Refs
   const stateRef = useRef(state);
   const initialStateRef = useRef(initialState);
-  const isMountedRef = useRef(false);
+  const loadedKeyRef = useRef<string | null>(null);
+  const historyIndexRef = useRef(historyIndex);
+  const syncManagerRef = useRef<SyncManager<T> | null>(null);
 
   // Keep stateRef in sync
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    historyIndexRef.current = historyIndex;
+  }, [historyIndex]);
 
   // Error handler
   /* istanbul ignore next -- @preserve Error handler callback branches */
@@ -200,12 +340,7 @@ export function useFormPersist<T extends Record<string, unknown>>(
 
       try {
         // Apply beforePersist transform
-        let processedData = beforePersist ? beforePersist(dataToSave) : dataToSave;
-
-        // Filter excluded fields
-        if (exclude && exclude.length > 0) {
-          processedData = filterExcludedFields(processedData, exclude) as T;
-        }
+        const processedData: T = beforePersist ? beforePersist(dataToSave) : dataToSave;
 
         // Validate data
         if (!validateData(processedData, validate)) {
@@ -213,8 +348,18 @@ export function useFormPersist<T extends Record<string, unknown>>(
           return;
         }
 
+        let dataForStorage: T | Partial<T> =
+          persistMode === 'dirty'
+            ? getDirtyData(processedData, initialStateRef.current)
+            : processedData;
+
+        // Filter excluded fields after validation (validation expects full T)
+        if (exclude && exclude.length > 0) {
+          dataForStorage = filterExcludedFields(dataForStorage as T, exclude);
+        }
+
         // Wrap with metadata
-        const wrapped = wrapWithMetadata(processedData, version ?? 1, expiration);
+        const wrapped = wrapWithMetadata(dataForStorage, version ?? 1, expiration);
 
         // Serialize
         const serialized = transformer.serialize(wrapped);
@@ -227,13 +372,84 @@ export function useFormPersist<T extends Record<string, unknown>>(
           );
         }
 
-        // Save to storage
-        storage.setItem(fullKey, serialized);
+        const executeWrite = (
+          existingRaw: string | null
+        ): void | Promise<void> => {
+          const existingManifest = existingRaw
+            ? parsePartitionManifest(existingRaw)
+            : null;
+          const cleanupOps: Array<void | Promise<void>> = [];
 
-        setIsPersisted(true);
-        setLastSaved(Date.now());
-        setSize(dataSize);
-        debugLog(debug ?? false, 'Saved to storage:', fullKey);
+          if (existingManifest) {
+            for (let i = 0; i < existingManifest.count; i++) {
+              cleanupOps.push(storage.removeItem(getPartitionKey(i)));
+            }
+          }
+
+          const shouldWritePartitions =
+            partitionOptions.enabled && dataSize > partitionOptions.maxSize;
+
+          if (shouldWritePartitions) {
+            const chunks = splitIntoPartitions(serialized, partitionOptions.maxSize);
+            const writeOps: Array<void | Promise<void>> = chunks.map(
+              (chunk, index) => storage.setItem(getPartitionKey(index), chunk)
+            );
+
+            const manifest = JSON.stringify({
+              [PARTITION_MARKER]: true,
+              count: chunks.length,
+            });
+
+            const ops = [
+              ...cleanupOps,
+              ...writeOps,
+              storage.setItem(fullKey, manifest),
+            ];
+
+            if (ops.some((op) => isPromiseLike<void>(op))) {
+              return Promise.all(ops.map((op) => Promise.resolve(op))).then(() => undefined);
+            }
+            return;
+          }
+
+          const mainWrite = storage.setItem(fullKey, serialized);
+          const ops = [...cleanupOps, mainWrite];
+          if (ops.some((op) => isPromiseLike<void>(op))) {
+            return Promise.all(ops.map((op) => Promise.resolve(op))).then(() => undefined);
+          }
+        };
+
+        const commitSuccess = () => {
+          syncManagerRef.current?.setLocalData(processedData);
+          syncManagerRef.current?.broadcast(processedData);
+
+          setIsPersisted(true);
+          setLastSaved(Date.now());
+          setSize(dataSize);
+          debugLog(debug ?? false, 'Saved to storage:', fullKey);
+        };
+
+        const existingRaw = storage.getItem(fullKey);
+        const writeResult = isPromiseLike<string | null>(existingRaw)
+          ? existingRaw.then((raw) =>
+              executeWrite(typeof raw === 'string' ? raw : null)
+            )
+          : executeWrite(typeof existingRaw === 'string' ? existingRaw : null);
+
+        if (isPromiseLike<void>(writeResult)) {
+          void writeResult
+            .then(() => {
+              commitSuccess();
+            })
+            .catch((e: unknown) => {
+              const error = e instanceof Error ? e : new Error(String(e));
+              const errorType = detectErrorType(error);
+              handleError(errorType, error.message, error);
+            });
+          return;
+        }
+
+        commitSuccess();
       } catch (e) {
         const error = e instanceof Error ? e : new Error(String(e));
         const errorType = detectErrorType(error);
@@ -246,11 +462,15 @@ export function useFormPersist<T extends Record<string, unknown>>(
       beforePersist,
       exclude,
       validate,
+      persistMode,
       version,
       expiration,
+      partitionOptions.enabled,
+      partitionOptions.maxSize,
       transformer,
       warnSize,
       storage,
+      getPartitionKey,
       fullKey,
       debug,
       handleError,
@@ -267,19 +487,38 @@ export function useFormPersist<T extends Record<string, unknown>>(
   // Load from storage on mount
   /* istanbul ignore next -- @preserve Load effect with optional branches */
   useEffect(() => {
-    if (isSSR() || !enabled || isMountedRef.current) {
+    if (isSSR() || !enabled) {
       return;
     }
 
-    isMountedRef.current = true;
+    // Avoid duplicate restore for the same storage key, but allow reload on key change.
+    if (loadedKeyRef.current === fullKey) {
+      return;
+    }
+    loadedKeyRef.current = fullKey;
 
     const loadFromStorage = async () => {
       try {
-        const raw = await storage.getItem(fullKey);
-
-        if (!raw) {
+        const primaryRaw = await storage.getItem(fullKey);
+        if (!primaryRaw || typeof primaryRaw !== 'string') {
           debugLog(debug ?? false, 'No stored data found for:', fullKey);
           return;
+        }
+
+        const partitionManifest = parsePartitionManifest(primaryRaw);
+        let raw = primaryRaw;
+
+        if (partitionManifest) {
+          let reconstructed = '';
+          for (let i = 0; i < partitionManifest.count; i++) {
+            const chunk = await storage.getItem(getPartitionKey(i));
+            if (!chunk || typeof chunk !== 'string') {
+              handleError('CORRUPTED_DATA', 'Missing partition chunk');
+              return;
+            }
+            reconstructed += chunk;
+          }
+          raw = reconstructed;
         }
 
         // Deserialize
@@ -291,44 +530,58 @@ export function useFormPersist<T extends Record<string, unknown>>(
         }
 
         // Validate structure
-        if (!isValidPersistedData<T>(parsed)) {
+        if (!isValidPersistedData<unknown>(parsed)) {
           handleError('CORRUPTED_DATA', 'Invalid data structure');
           return;
         }
 
+        const persisted = parsed as PersistedData<unknown>;
+
         // Check expiration
-        if (isExpired(parsed)) {
+        if (isExpired(persisted)) {
           debugLog(debug ?? false, 'Stored data expired, clearing');
-          storage.removeItem(fullKey);
+          const removeOps: Array<void | Promise<void>> = [storage.removeItem(fullKey)];
+          if (partitionManifest) {
+            for (let i = 0; i < partitionManifest.count; i++) {
+              removeOps.push(storage.removeItem(getPartitionKey(i)));
+            }
+          }
+          if (removeOps.some((op) => isPromiseLike<void>(op))) {
+            await Promise.all(removeOps.map((op) => Promise.resolve(op)));
+          }
           return;
         }
 
         // Migrate if needed
-        let data = migrateData(
-          parsed.data,
-          parsed.version,
+        const migratedData = migrateData<T>(
+          persisted.data,
+          persisted.version,
           version ?? 1,
           migrate
         );
 
-        if (data === null) {
+        if (migratedData === null) {
           handleError('MIGRATION_FAILED', 'Failed to migrate data');
           return;
         }
 
         // Merge with initial state
-        data = mergeFn(data as Partial<T>, initialState);
+        const mergedData = mergeFn(migratedData as Partial<T>, initialState);
+        syncManagerRef.current?.setLocalData(mergedData);
 
         // Update state
-        setStateInternal(data);
+        setStateInternal(mergedData);
         setIsPersisted(true);
         setIsRestored(true);
-        setLastSaved(parsed.timestamp);
-        setHistory([data]);
-        setHistoryIndex(0);
+        setLastSaved(persisted.timestamp);
+
+        if (historyEnabled) {
+          setHistory([mergedData]);
+          setHistoryIndex(0);
+        }
 
         // Call onRestore callback
-        onRestore?.(data);
+        onRestore?.(mergedData);
         debugLog(debug ?? false, 'Restored from storage:', fullKey);
       } catch (e) /* istanbul ignore next -- @preserve Defensive error handling */ {
         const error = e instanceof Error ? e : new Error(String(e));
@@ -346,9 +599,93 @@ export function useFormPersist<T extends Record<string, unknown>>(
     migrate,
     mergeFn,
     initialState,
+    historyEnabled,
+    getPartitionKey,
     onRestore,
     debug,
     handleError,
+  ]);
+
+  // Sync state across tabs when enabled.
+  useEffect(() => {
+    if (isSSR() || !syncOptions.enabled) {
+      return;
+    }
+
+    const manager = new SyncManager<T>(fullKey, {
+      enabled: true,
+      channel: syncOptions.channel,
+      strategy: syncOptions.strategy,
+      conflictResolver: syncOptions.conflictResolver,
+      onSync: syncOptions.onSync,
+    });
+    syncManagerRef.current = manager;
+    manager.setLocalData(stateRef.current);
+
+    manager.onSync((incomingData, source) => {
+      if (incomingData === undefined) {
+        stateRef.current = initialStateRef.current;
+        setStateInternal(initialStateRef.current);
+        setIsPersisted(false);
+        setLastSaved(null);
+        setSize(0);
+        if (historyEnabled) {
+          setHistory([initialStateRef.current]);
+          setHistoryIndex(0);
+        }
+        debugLog(debug ?? false, `Cleared from ${source}:`, fullKey);
+        return;
+      }
+
+      const nextState = mergeFn(
+        incomingData as Partial<T>,
+        initialStateRef.current
+      );
+
+      if (isEqual(nextState, stateRef.current)) {
+        return;
+      }
+
+      stateRef.current = nextState;
+      manager.setLocalData(nextState);
+      setStateInternal(nextState);
+      setIsPersisted(true);
+      setLastSaved(Date.now());
+
+      if (historyEnabled) {
+        setHistory((prev) => {
+          const nextHistory = prev.slice(0, historyIndexRef.current + 1);
+          nextHistory.push(nextState);
+          if (nextHistory.length > maxHistory) {
+            nextHistory.shift();
+          }
+          return nextHistory;
+        });
+        setHistoryIndex((prev) => Math.min(prev + 1, maxHistory - 1));
+      }
+
+      debugLog(debug ?? false, `Synced from ${source}:`, fullKey);
+    });
+
+    manager.requestSync();
+
+    return () => {
+      manager.destroy();
+      if (syncManagerRef.current === manager) {
+        syncManagerRef.current = null;
+      }
+    };
+  }, [
+    fullKey,
+    syncOptions.enabled,
+    syncOptions.channel,
+    syncOptions.strategy,
+    syncOptions.conflictResolver,
+    syncOptions.onSync,
+    mergeFn,
+    debug,
+    historyEnabled,
+    maxHistory,
   ]);
 
   // Flush on unmount
@@ -369,23 +706,20 @@ export function useFormPersist<T extends Record<string, unknown>>(
             : action;
 
         // Update history if enabled
-        if (mergedOptions.history) {
-          const maxHistory =
-            typeof mergedOptions.history === 'object'
-              ? mergedOptions.history.maxHistory ?? DEFAULT_MAX_HISTORY
-              : DEFAULT_MAX_HISTORY;
-
+        if (historyEnabled) {
           setHistory((prev) => {
-            const newHistory = prev.slice(0, historyIndex + 1);
+            const newHistory = prev.slice(0, historyIndexRef.current + 1);
             newHistory.push(newState);
             /* istanbul ignore if -- @preserve History trimming edge case */
             if (newHistory.length > maxHistory) {
               newHistory.shift();
             }
+            setHistoryIndex(newHistory.length - 1);
             return newHistory;
           });
-          setHistoryIndex((prev) => Math.min(prev + 1, maxHistory - 1));
         }
+
+        syncManagerRef.current?.setLocalData(newState);
 
         // Schedule save
         saveController.save(newState);
@@ -393,23 +727,63 @@ export function useFormPersist<T extends Record<string, unknown>>(
         return newState;
       });
     },
-    [saveController, mergedOptions.history, historyIndex]
+    [saveController, historyEnabled, maxHistory]
   );
 
   // Clear storage
   /* istanbul ignore next -- @preserve Clear function with optional debug */
   const clear = useCallback(() => {
     try {
-      storage.removeItem(fullKey);
-      setIsPersisted(false);
-      setLastSaved(null);
-      setSize(0);
-      debugLog(debug ?? false, 'Cleared storage:', fullKey);
+      const removeStoredData = (
+        existingRaw: string | null
+      ): void | Promise<void> => {
+        const manifest = existingRaw ? parsePartitionManifest(existingRaw) : null;
+        const removeOps: Array<void | Promise<void>> = [storage.removeItem(fullKey)];
+
+        if (manifest) {
+          for (let i = 0; i < manifest.count; i++) {
+            removeOps.push(storage.removeItem(getPartitionKey(i)));
+          }
+        }
+
+        if (removeOps.some((op) => isPromiseLike<void>(op))) {
+          return Promise.all(removeOps.map((op) => Promise.resolve(op))).then(() => undefined);
+        }
+      };
+
+      const commitClear = () => {
+        syncManagerRef.current?.broadcastClear();
+        setIsPersisted(false);
+        setLastSaved(null);
+        setSize(0);
+        debugLog(debug ?? false, 'Cleared storage:', fullKey);
+      };
+
+      const existingRaw = storage.getItem(fullKey);
+      const removeResult = isPromiseLike<string | null>(existingRaw)
+        ? existingRaw.then((raw) =>
+            removeStoredData(typeof raw === 'string' ? raw : null)
+          )
+        : removeStoredData(typeof existingRaw === 'string' ? existingRaw : null);
+
+      if (isPromiseLike<void>(removeResult)) {
+        void removeResult
+          .then(() => {
+            commitClear();
+          })
+          .catch((e: unknown) => {
+            const error = e instanceof Error ? e : new Error(String(e));
+            handleError('UNKNOWN', error.message, error);
+          });
+        return;
+      }
+
+      commitClear();
     } catch (e) /* istanbul ignore next -- @preserve Defensive error handling */ {
       const error = e instanceof Error ? e : new Error(String(e));
       handleError('UNKNOWN', error.message, error);
     }
-  }, [storage, fullKey, debug, handleError]);
+  }, [storage, fullKey, getPartitionKey, debug, handleError]);
 
   // Force save immediately
   const forceSave = useCallback(() => {
@@ -428,8 +802,8 @@ export function useFormPersist<T extends Record<string, unknown>>(
   }, []);
 
   // Undo/redo
-  const canUndo = historyIndex > 0;
-  const canRedo = historyIndex < history.length - 1;
+  const canUndo = historyEnabled && historyIndex > 0;
+  const canRedo = historyEnabled && historyIndex < history.length - 1;
 
   /* istanbul ignore next -- @preserve Undo callback with guard */
   const undo = useCallback(() => {
@@ -437,6 +811,7 @@ export function useFormPersist<T extends Record<string, unknown>>(
     const newIndex = historyIndex - 1;
     setHistoryIndex(newIndex);
     setStateInternal(history[newIndex]);
+    syncManagerRef.current?.setLocalData(history[newIndex]);
     saveController.save(history[newIndex]);
   }, [canUndo, historyIndex, history, saveController]);
 
@@ -446,6 +821,7 @@ export function useFormPersist<T extends Record<string, unknown>>(
     const newIndex = historyIndex + 1;
     setHistoryIndex(newIndex);
     setStateInternal(history[newIndex]);
+    syncManagerRef.current?.setLocalData(history[newIndex]);
     saveController.save(history[newIndex]);
   }, [canRedo, historyIndex, history, saveController]);
 
@@ -475,18 +851,41 @@ export function useFormPersist<T extends Record<string, unknown>>(
 
     try {
       const raw = storage.getItem(fullKey);
+      if (isPromiseLike<string | null>(raw)) {
+        debugLog(
+          debug ?? false,
+          'getPersistedValue requires a synchronous storage adapter'
+        );
+        return null;
+      }
+
       if (!raw || typeof raw !== 'string') return null;
 
-      const parsed = transformer.deserialize(raw);
-      if (!parsed || !isValidPersistedData<T>(parsed)) return null;
+      const manifest = parsePartitionManifest(raw);
+      let payload = raw;
+
+      if (manifest) {
+        let reconstructed = '';
+        for (let i = 0; i < manifest.count; i++) {
+          const chunk = storage.getItem(getPartitionKey(i));
+          if (isPromiseLike<string | null>(chunk) || !chunk || typeof chunk !== 'string') {
+            return null;
+          }
+          reconstructed += chunk;
+        }
+        payload = reconstructed;
+      }
+
+      const parsed = transformer.deserialize(payload);
+      if (!parsed || !isValidPersistedData<unknown>(parsed)) return null;
       if (isExpired(parsed)) return null;
 
-      return parsed.data;
+      return parsed.data as T;
     } catch {
       /* istanbul ignore next -- @preserve Defensive error handling */
       return null;
     }
-  }, [storage, fullKey, transformer]);
+  }, [storage, fullKey, getPartitionKey, transformer, debug]);
 
   // Check if dirty
   const isDirty = useMemo(
@@ -498,6 +897,7 @@ export function useFormPersist<T extends Record<string, unknown>>(
   const revert = useCallback(() => {
     const persisted = getPersistedValue();
     if (persisted) {
+      syncManagerRef.current?.setLocalData(persisted);
       setStateInternal(persisted);
     }
   }, [getPersistedValue]);

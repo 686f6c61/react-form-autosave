@@ -29,6 +29,15 @@ interface SyncMessage<T> {
  */
 type SyncCallback<T> = (data: T, source: 'storage' | 'broadcast') => void;
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.prototype.toString.call(value) === '[object Object]'
+  );
+}
+
 /**
  * Generate a unique tab identifier
  */
@@ -60,6 +69,7 @@ export class SyncManager<T> {
   private tabId: string;
   private callback: SyncCallback<T> | null = null;
   private isDestroyed = false;
+  private lastLocalData: T | undefined;
 
   constructor(key: string, options: SyncOptions<T> = {}) {
     this.key = key;
@@ -80,21 +90,21 @@ export class SyncManager<T> {
       try {
         const channelName = this.options.channel ?? DEFAULT_SYNC_CHANNEL;
         this.channel = new BroadcastChannel(channelName);
-        this.channel.onmessage = this.handleBroadcastMessage.bind(this);
+        this.channel.onmessage = this.handleBroadcastMessage;
       } catch {
         // BroadcastChannel not available
       }
     }
 
     // Always listen to storage events as fallback
-    window.addEventListener('storage', this.handleStorageEvent.bind(this));
+    window.addEventListener('storage', this.handleStorageEvent);
   }
 
   /**
    * Handle incoming BroadcastChannel messages
    */
   /* istanbul ignore next -- @preserve BroadcastChannel handler difficult to test in jsdom */
-  private handleBroadcastMessage(event: MessageEvent<SyncMessage<T>>): void {
+  private handleBroadcastMessage = (event: MessageEvent<SyncMessage<T>>): void => {
     if (this.isDestroyed) return;
 
     const message = event.data;
@@ -105,13 +115,20 @@ export class SyncManager<T> {
     // Ignore messages for other keys
     if (message.key !== this.key) return;
 
+    if (message.type === 'request') {
+      if (this.lastLocalData !== undefined) {
+        this.broadcast(this.lastLocalData);
+      }
+      return;
+    }
+
     if (message.type === 'update' && message.data !== undefined) {
       this.handleIncomingData(message.data, 'broadcast');
     } else if (message.type === 'clear') {
-      // Handle clear message - notify callback with empty/null data
-      this.options.onSync?.(undefined as unknown as T, 'broadcast');
+      this.lastLocalData = undefined;
+      this.notifySync(undefined as unknown as T, 'broadcast');
     }
-  }
+  };
 
   /**
    * Handle storage events (fallback for cross-tab sync)
@@ -125,20 +142,26 @@ export class SyncManager<T> {
 
     // Handle clear
     if (event.newValue === null) {
-      this.options.onSync?.(undefined as unknown as T, 'storage');
+      this.lastLocalData = undefined;
+      this.notifySync(undefined as unknown as T, 'storage');
       return;
     }
 
     // Try to parse the new value
     try {
-      const parsed = JSON.parse(event.newValue);
-      if (parsed && parsed.data) {
-        this.handleIncomingData(parsed.data, 'storage');
+      const parsed = JSON.parse(event.newValue) as unknown;
+      if (parsed && typeof parsed === 'object' && 'data' in parsed) {
+        this.handleIncomingData((parsed as { data: T }).data, 'storage');
       }
     } catch {
       // Invalid JSON, ignore
     }
   };
+
+  private notifySync(data: T, source: 'storage' | 'broadcast'): void {
+    this.callback?.(data, source);
+    this.options.onSync?.(data, source);
+  }
 
   /**
    * Handle incoming data with conflict resolution
@@ -146,26 +169,28 @@ export class SyncManager<T> {
   /* istanbul ignore next -- @preserve Incoming data handler with optional callbacks */
   private handleIncomingData(data: T, source: 'storage' | 'broadcast'): void {
     const strategy = this.options.strategy ?? 'latest-wins';
+    let resolvedData = data;
 
-    // For 'latest-wins', just use the incoming data
-    if (strategy === 'latest-wins') {
-      this.callback?.(data, source);
-      this.options.onSync?.(data, source);
-      return;
+    if (
+      (strategy === 'merge' || strategy === 'ask-user') &&
+      this.options.conflictResolver &&
+      this.lastLocalData !== undefined
+    ) {
+      resolvedData = this.options.conflictResolver(this.lastLocalData, data);
+    } else if (
+      strategy === 'merge' &&
+      this.lastLocalData !== undefined &&
+      isPlainObject(this.lastLocalData) &&
+      isPlainObject(data)
+    ) {
+      resolvedData = {
+        ...this.lastLocalData,
+        ...data,
+      } as T;
     }
 
-    // For 'merge' or 'ask-user', use conflict resolver if provided
-    if (this.options.conflictResolver) {
-      // We'd need current state to merge - this requires integration with the hook
-      // For now, just pass through to callback
-      this.callback?.(data, source);
-      this.options.onSync?.(data, source);
-      return;
-    }
-
-    // Default: accept incoming data
-    this.callback?.(data, source);
-    this.options.onSync?.(data, source);
+    this.lastLocalData = resolvedData;
+    this.notifySync(resolvedData, source);
   }
 
   /**
@@ -176,10 +201,18 @@ export class SyncManager<T> {
   }
 
   /**
+   * Set local data for conflict resolution and request-response sync.
+   */
+  setLocalData(data: T): void {
+    this.lastLocalData = data;
+  }
+
+  /**
    * Broadcast data to other tabs
    */
   broadcast(data: T): void {
     if (this.isDestroyed || isSSR()) return;
+    this.lastLocalData = data;
 
     const message: SyncMessage<T> = {
       type: 'update',
@@ -207,6 +240,7 @@ export class SyncManager<T> {
    */
   broadcastClear(): void {
     if (this.isDestroyed || isSSR()) return;
+    this.lastLocalData = undefined;
 
     const message: SyncMessage<T> = {
       type: 'clear',

@@ -363,6 +363,41 @@ describe('syncManager', () => {
         manager.destroy();
       });
 
+      it('should resolve conflicts using local data when available', () => {
+        const conflictResolver = jest.fn((local, remote) => ({
+          ...local,
+          ...remote,
+          merged: true,
+        }));
+        const callback = jest.fn();
+        const manager = new SyncManager('test-key', {
+          strategy: 'merge',
+          conflictResolver,
+        });
+
+        manager.setLocalData({ name: 'local', email: 'local@test.com' } as unknown as { name: string; email: string });
+        manager.onSync(callback);
+
+        if (storageEventHandler) {
+          const event = {
+            key: 'test-key',
+            newValue: JSON.stringify({ data: { name: 'remote' } }),
+          } as StorageEvent;
+
+          storageEventHandler(event);
+        }
+
+        expect(conflictResolver).toHaveBeenCalledWith(
+          { name: 'local', email: 'local@test.com' },
+          { name: 'remote' }
+        );
+        expect(callback).toHaveBeenCalledWith(
+          { name: 'remote', email: 'local@test.com', merged: true },
+          'storage'
+        );
+        manager.destroy();
+      });
+
       it('should handle merge strategy without conflict resolver', () => {
         const onSync = jest.fn();
         const callback = jest.fn();
@@ -385,6 +420,31 @@ describe('syncManager', () => {
         }
 
         expect(callback).toHaveBeenCalledWith({ name: 'default' }, 'storage');
+        manager.destroy();
+      });
+
+      it('should merge with local object when no conflictResolver is provided', () => {
+        const callback = jest.fn();
+        const manager = new SyncManager<{ name?: string; email?: string }>('test-key', {
+          strategy: 'merge',
+        });
+
+        manager.setLocalData({ name: 'local', email: 'local@test.com' });
+        manager.onSync(callback);
+
+        if (storageEventHandler) {
+          const event = {
+            key: 'test-key',
+            newValue: JSON.stringify({ data: { name: 'remote' } }),
+          } as StorageEvent;
+
+          storageEventHandler(event);
+        }
+
+        expect(callback).toHaveBeenCalledWith(
+          { name: 'remote', email: 'local@test.com' },
+          'storage'
+        );
         manager.destroy();
       });
 

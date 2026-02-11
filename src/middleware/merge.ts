@@ -54,6 +54,34 @@ export function shallowMerge<T>(stored: Partial<T>, initial: T): T {
   };
 }
 
+function deepMergeObjects(
+  stored: Record<string, unknown>,
+  initial: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...initial };
+
+  // Dangerous keys that could lead to prototype pollution
+  const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+
+  for (const key of Object.keys(stored)) {
+    // Skip dangerous keys to prevent prototype pollution
+    if (dangerousKeys.includes(key)) {
+      continue;
+    }
+
+    const storedValue = stored[key];
+    const initialValue = initial[key];
+
+    if (isPlainObject(storedValue) && isPlainObject(initialValue)) {
+      result[key] = deepMergeObjects(storedValue, initialValue);
+    } else if (storedValue !== undefined) {
+      result[key] = storedValue;
+    }
+  }
+
+  return result;
+}
+
 /**
  * Deep merge: recursively merge nested objects
  *
@@ -76,28 +104,10 @@ export function deepMerge<T>(stored: Partial<T>, initial: T): T {
     return (stored as T) ?? initial;
   }
 
-  const result: Record<string, unknown> = { ...initial };
-
-  // Dangerous keys that could lead to prototype pollution
-  const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
-
-  for (const key of Object.keys(stored)) {
-    // Skip dangerous keys to prevent prototype pollution
-    if (dangerousKeys.includes(key)) {
-      continue;
-    }
-
-    const storedValue = stored[key as keyof typeof stored];
-    const initialValue = initial[key as keyof typeof initial];
-
-    if (isPlainObject(storedValue) && isPlainObject(initialValue)) {
-      result[key] = deepMerge(storedValue, initialValue);
-    } else if (storedValue !== undefined) {
-      result[key] = storedValue;
-    }
-  }
-
-  return result as T;
+  return deepMergeObjects(
+    stored as Record<string, unknown>,
+    initial
+  ) as T;
 }
 
 /**

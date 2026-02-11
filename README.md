@@ -24,7 +24,7 @@ This library is designed specifically for form persistence with a complete featu
 
 **Framework agnostic**. Works with any form approach: react-hook-form, Formik, plain controlled inputs, or any other solution. The API mirrors useState, so integration requires changing one import.
 
-**Zero dependencies**. The core bundle is under 2KB gzipped. No runtime dependencies beyond React itself. Optional features like history and sync are separate imports that only increase bundle size if you use them.
+**Zero dependencies**. No runtime dependencies beyond React itself. The current size-limit check reports **7.22 kB** (brotli, with dependencies) for the main ESM build. Optional features like history and sync are separate imports that only increase bundle size if you use them.
 
 **Form-aware features out of the box**. Debounced saves prevent excessive writes during typing. Field exclusion keeps passwords and credit card numbers out of storage. Data expiration automatically cleans up stale form data. Schema versioning with migrations handles evolving form structures.
 
@@ -42,7 +42,7 @@ This library is designed specifically for form persistence with a complete featu
 |---------|---------------------|------------------------|------------------------|---------------|
 | Framework agnostic | Yes | No (react-hook-form only) | Yes | No (Redux only) |
 | Zero dependencies | Yes | No | Yes | No |
-| Bundle size | <2KB | ~1KB | ~1KB | ~10KB |
+| Bundle size | 7.22KB (brotli, current) | ~1KB | ~1KB | ~10KB |
 | Debounced saves | Yes | No | No | No |
 | Field exclusion | Yes | Yes | No | No |
 | Data expiration | Yes | Yes | No | No |
@@ -71,6 +71,7 @@ Consider alternatives if you already use Redux and want to persist your entire s
 - [Actions and methods](#actions-and-methods)
 - [Advanced usage](#advanced-usage)
 - [Testing](#testing)
+- [Development checks](#development-checks)
 - [Browser support](#browser-support)
 - [Test coverage](#test-coverage)
 - [License](#license)
@@ -91,7 +92,7 @@ yarn add react-form-autosave
 pnpm add react-form-autosave
 ```
 
-The library requires React 16.8 or higher as a peer dependency.
+The library requires React 17 or higher as a peer dependency.
 
 ## Quick start
 
@@ -772,9 +773,23 @@ it('should call storage methods', () => {
 });
 ```
 
+## Development checks
+
+Run all project quality gates locally:
+
+```bash
+npm run check
+```
+
+Generate coverage locally (same threshold profile used in CI):
+
+```bash
+npm run test -- --coverage --runInBand
+```
+
 ## Tree-shaking
 
-The library is designed for optimal tree-shaking. The core functionality is under 2KB gzipped. Optional features are available as separate imports:
+The library is designed for optimal tree-shaking. The main bundle currently measures **7.22 kB** brotlied in `size-limit`. Optional features are available as separate imports:
 
 ```typescript
 // Core (always needed)
@@ -797,7 +812,7 @@ In environments where storage is unavailable, such as some privacy-focused brows
 
 ## Test coverage
 
-The library maintains 100% test coverage across all metrics. The test suite includes 392 tests covering all functionality.
+The test suite currently includes **419 tests** covering the full public feature set.
 
 | Metric | Coverage |
 |--------|----------|

@@ -8,7 +8,7 @@
  * React hook for cross-tab synchronization
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import type { SyncOptions } from '../core/types';
 import { SyncManager } from './syncManager';
 
@@ -42,13 +42,33 @@ export function useSync<T>(
   requestSync: () => void;
 } {
   const managerRef = useRef<SyncManager<T> | null>(null);
+  const onUpdateRef = useRef(onUpdate);
+  const {
+    enabled,
+    channel,
+    strategy,
+    conflictResolver,
+    onSync,
+  } = options;
+  const managerOptions = useMemo<SyncOptions<T>>(
+    () => ({
+      enabled,
+      channel,
+      strategy,
+      conflictResolver,
+      onSync,
+    }),
+    [enabled, channel, strategy, conflictResolver, onSync]
+  );
 
   // Initialize manager
   useEffect(() => {
-    if (!options.enabled) return;
+    if (!enabled) return;
 
-    managerRef.current = new SyncManager(key, options);
-    managerRef.current.onSync(onUpdate);
+    managerRef.current = new SyncManager(key, managerOptions);
+    managerRef.current.onSync((data, source) => {
+      onUpdateRef.current(data, source);
+    });
 
     return () => {
       /* istanbul ignore next -- @preserve Cleanup null check */
@@ -57,13 +77,11 @@ export function useSync<T>(
       }
       managerRef.current = null;
     };
-  }, [key, options.enabled, options.channel, options.strategy]);
+  }, [key, enabled, managerOptions]);
 
   // Update callback when it changes
   useEffect(() => {
-    if (managerRef.current) {
-      managerRef.current.onSync(onUpdate);
-    }
+    onUpdateRef.current = onUpdate;
   }, [onUpdate]);
 
   const broadcast = useCallback((data: T) => {

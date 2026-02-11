@@ -19,7 +19,10 @@ const external = ['react', 'react-dom'];
 const plugins = [
   resolve(),
   commonjs(),
-  typescript({ tsconfig: './tsconfig.json' }),
+  typescript({
+    tsconfig: './tsconfig.json',
+    noEmitOnError: true,
+  }),
   terser({
     compress: {
       pure_getters: true,

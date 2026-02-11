@@ -1,6 +1,6 @@
 {
   "name": "react-form-autosave",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Zero-dependency React library for automatically persisting form state to localStorage/sessionStorage with SSR support, tab sync, undo/redo, and GDPR compliance",
   "author": "686f6c61",
   "license": "MIT",
@@ -33,50 +33,52 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.esm.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./history": {
+      "types": "./dist/history.d.ts",
       "import": "./dist/history.esm.js",
-      "require": "./dist/history.js",
-      "types": "./dist/history.d.ts"
+      "require": "./dist/history.js"
     },
     "./sync": {
+      "types": "./dist/sync.d.ts",
       "import": "./dist/sync.esm.js",
-      "require": "./dist/sync.js",
-      "types": "./dist/sync.d.ts"
+      "require": "./dist/sync.js"
     },
     "./devtools": {
+      "types": "./dist/devtools.d.ts",
       "import": "./dist/devtools.esm.js",
-      "require": "./dist/devtools.js",
-      "types": "./dist/devtools.d.ts"
+      "require": "./dist/devtools.js"
     },
     "./testing": {
+      "types": "./dist/testing.d.ts",
       "import": "./dist/testing.esm.js",
-      "require": "./dist/testing.js",
-      "types": "./dist/testing.d.ts"
+      "require": "./dist/testing.js"
     }
   },
   "scripts": {
-    "build": "rollup -c",
-    "dev": "rollup -c -w",
+    "build": "rollup -c rollup.config.mjs",
+    "dev": "rollup -c rollup.config.mjs -w",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "type-check": "tsc --noEmit",
-    "prepublishOnly": "npm run lint && npm run test && npm run build",
+    "check": "npm run lint && npm run type-check && npm run test -- --runInBand && npm run build && npm run size",
+    "prepublishOnly": "npm run lint && npm run type-check && npm run test -- --runInBand && npm run build && npm run size",
     "size": "size-limit",
     "demo": "cd demo && npm run dev"
   },
   "peerDependencies": {
-    "react": ">=16.8.0"
+    "react": ">=17.0.0"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.7",
@@ -90,6 +92,7 @@
     "@types/react": "^18.2.64",
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
+    "baseline-browser-mapping": "^2.9.19",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.0",
     "eslint-plugin-react-hooks": "^4.6.0",
@@ -107,7 +110,7 @@
   "size-limit": [
     {
       "path": "dist/index.esm.js",
-      "limit": "2 KB"
+      "limit": "8 KB"
     }
   ],
   "engines": {

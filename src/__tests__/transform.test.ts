@@ -19,6 +19,7 @@ import {
   unwrapData,
   filterExcludedFields,
 } from '../middleware/transform';
+import type { PersistedData } from '../core/types';
 
 describe('transform', () => {
   describe('defaultSerialize', () => {
@@ -261,9 +262,15 @@ describe('transform', () => {
     });
 
     it('should return null for invalid wrapper', () => {
-      expect(unwrapData(null as any)).toBeNull();
-      expect(unwrapData(undefined as any)).toBeNull();
-      expect(unwrapData('string' as any)).toBeNull();
+      expect(unwrapData<{ name: string }>(
+        null as unknown as PersistedData<{ name: string }>
+      )).toBeNull();
+      expect(unwrapData<{ name: string }>(
+        undefined as unknown as PersistedData<{ name: string }>
+      )).toBeNull();
+      expect(unwrapData<{ name: string }>(
+        'string' as unknown as PersistedData<{ name: string }>
+      )).toBeNull();
     });
   });
 
@@ -291,14 +298,17 @@ describe('transform', () => {
 
     it('should return original data when exclude is undefined', () => {
       const data = { name: 'John' };
-      const filtered = filterExcludedFields(data, undefined as any);
+      const filtered = filterExcludedFields(
+        data,
+        undefined as unknown as (keyof typeof data)[]
+      );
 
       expect(filtered).toEqual(data);
     });
 
     it('should handle non-existent fields in exclude', () => {
       const data = { name: 'John' };
-      const filtered = filterExcludedFields(data, ['nonexistent' as any]);
+      const filtered = filterExcludedFields(data, ['nonexistent' as keyof typeof data]);
 
       expect(filtered).toEqual({ name: 'John' });
     });
