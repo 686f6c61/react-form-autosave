@@ -489,12 +489,13 @@ function App() {
 {`import { useFormRegistry } from 'react-form-autosave';
 
 function FormDebugPanel() {
-  const registry = useFormRegistry();
+  const { getAll } = useFormRegistry();
+  const entries = Array.from(getAll().entries());
 
   return (
     <div>
-      <h3>Active forms: {Object.keys(registry).length}</h3>
-      {Object.entries(registry).map(([key, entry]) => (
+      <h3>Active forms: {entries.length}</h3>
+      {entries.map(([key, entry]) => (
         <div key={key}>
           <strong>{key}</strong>
           <pre>{JSON.stringify(entry.data, null, 2)}</pre>

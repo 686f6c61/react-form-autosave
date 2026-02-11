@@ -7,11 +7,12 @@
  * Main demo application showcasing various use cases
  */
 
-import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { FormPersistProvider } from 'react-form-autosave';
 import './app.css';
 
-type DemoType = 'simple' | 'wizard' | 'checkout' | 'gdpr' | 'undo' | 'sync' | 'expiration' | 'migration' | 'indicator' | 'features' | 'docs';
+type DemoType = 'simple' | 'wizard' | 'checkout' | 'gdpr' | 'undo' | 'sync' | 'expiration' | 'migration' | 'indicator' | 'features';
+type AppView = 'playground' | 'docs';
 
 const demos: { key: DemoType; label: string; isInfo?: boolean }[] = [
   { key: 'simple', label: 'Simple Form' },
@@ -24,10 +25,9 @@ const demos: { key: DemoType; label: string; isInfo?: boolean }[] = [
   { key: 'migration', label: 'Migration' },
   { key: 'indicator', label: 'Save Indicator' },
   { key: 'features', label: 'Features', isInfo: true },
-  { key: 'docs', label: 'Documentation', isInfo: true },
 ];
 
-const demoComponents: Record<DemoType, React.LazyExoticComponent<() => JSX.Element>> = {
+const demoComponents: Record<DemoType, ReturnType<typeof lazy>> = {
   simple: lazy(async () => ({ default: (await import('./components/SimpleFormDemo')).SimpleFormDemo })),
   wizard: lazy(async () => ({ default: (await import('./components/WizardDemo')).WizardDemo })),
   checkout: lazy(async () => ({ default: (await import('./components/CheckoutDemo')).CheckoutDemo })),
@@ -38,53 +38,78 @@ const demoComponents: Record<DemoType, React.LazyExoticComponent<() => JSX.Eleme
   migration: lazy(async () => ({ default: (await import('./components/MigrationDemo')).MigrationDemo })),
   indicator: lazy(async () => ({ default: (await import('./components/AutoSaveIndicatorDemo')).AutoSaveIndicatorDemo })),
   features: lazy(async () => ({ default: (await import('./components/FeaturesSection')).FeaturesSection })),
-  docs: lazy(async () => ({ default: (await import('./components/DocumentationSection')).DocumentationSection })),
 };
+const DocsZone = lazy(async () => ({ default: (await import('./components/DocsZone')).DocsZone }));
 
 const DEMO_QUERY_PARAM = 'demo';
+
+interface LocationState {
+  view: AppView;
+  demo: DemoType;
+}
 
 function isDemoType(value: string | null): value is DemoType {
   return demos.some((demo) => demo.key === value);
 }
 
-function readDemoFromLocation(): DemoType {
+function readLocationState(): LocationState {
   if (typeof window === 'undefined') {
-    return 'simple';
+    return { view: 'playground', demo: 'simple' };
   }
 
+  const normalizedPathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(window.location.search);
   const fromQuery = params.get(DEMO_QUERY_PARAM);
+
+  if (normalizedPathname === '/docs' || fromQuery === 'docs') {
+    return { view: 'docs', demo: 'simple' };
+  }
+
   if (isDemoType(fromQuery)) {
-    return fromQuery;
+    return { view: 'playground', demo: fromQuery };
   }
 
   const fromHash = window.location.hash.replace('#', '');
   if (isDemoType(fromHash)) {
-    return fromHash;
+    return { view: 'playground', demo: fromHash };
   }
 
-  return 'simple';
+  return { view: 'playground', demo: 'simple' };
 }
 
-function writeDemoToLocation(demo: DemoType): void {
+function writeLocationState(state: LocationState): void {
   if (typeof window === 'undefined') {
     return;
   }
+
   const url = new URL(window.location.href);
-  url.searchParams.set(DEMO_QUERY_PARAM, demo);
-  window.history.replaceState(null, '', `${url.pathname}?${url.searchParams.toString()}`);
+
+  if (state.view === 'docs') {
+    url.pathname = '/docs';
+    url.search = '';
+  } else {
+    url.pathname = '/';
+    url.searchParams.set(DEMO_QUERY_PARAM, state.demo);
+  }
+
+  url.hash = '';
+  window.history.replaceState(null, '', `${url.pathname}${url.search}`);
 }
 
 export default function App() {
-  const [activeDemo, setActiveDemo] = useState<DemoType>(() => readDemoFromLocation());
+  const initialState = readLocationState();
+  const [view, setView] = useState<AppView>(initialState.view);
+  const [activeDemo, setActiveDemo] = useState<DemoType>(initialState.demo);
 
   useEffect(() => {
-    writeDemoToLocation(activeDemo);
-  }, [activeDemo]);
+    writeLocationState({ view, demo: activeDemo });
+  }, [view, activeDemo]);
 
   useEffect(() => {
     const handlePopState = () => {
-      setActiveDemo(readDemoFromLocation());
+      const next = readLocationState();
+      setView(next.view);
+      setActiveDemo(next.demo);
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -93,8 +118,22 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    document.title =
+      view === 'docs'
+        ? 'react-form-autosave Documentation'
+        : 'react-form-autosave Demo Playground';
+  }, [view]);
+
   const ActiveDemo = useMemo(() => demoComponents[activeDemo], [activeDemo]);
   const currentVersion = __LIB_VERSION__;
+  const isDocsView = view === 'docs';
+
+  const openDocs = () => setView('docs');
+  const openPlayground = (demo: DemoType = 'simple') => {
+    setView('playground');
+    setActiveDemo(demo);
+  };
 
   return (
     <FormPersistProvider
@@ -105,11 +144,16 @@ export default function App() {
     >
       <div className="demo-shell">
         <header className="hero">
-          <p className="hero-badge">v{currentVersion} · React form persistence toolkit</p>
-          <h1 className="hero-title">Persist React forms without boilerplate</h1>
+          <p className="hero-badge">
+            v{currentVersion} · {isDocsView ? 'Documentation Hub' : 'React form persistence toolkit'}
+          </p>
+          <h1 className="hero-title">
+            {isDocsView ? 'react-form-autosave Documentation' : 'Persist React forms without boilerplate'}
+          </h1>
           <p className="hero-subtitle">
-            Autosave, restore, expiration, undo/redo, tab sync, migrations, and consent-based
-            persistence in one library. Explore demos and copy production-ready patterns.
+            {isDocsView
+              ? 'Reference docs and practical recipes for integrating autosave, migrations, cross-tab sync, and GDPR controls in production forms.'
+              : 'Autosave, restore, expiration, undo/redo, tab sync, migrations, and consent-based persistence in one library. Explore demos and copy production-ready patterns.'}
           </p>
 
           <div className="hero-actions">
@@ -129,20 +173,32 @@ export default function App() {
             >
               View source
             </a>
-            <button
-              type="button"
-              className="hero-action"
-              onClick={() => setActiveDemo('simple')}
-            >
-              Try live demos
-            </button>
-            <button
-              type="button"
-              className="hero-action"
-              onClick={() => setActiveDemo('docs')}
-            >
-              Open docs
-            </button>
+            {isDocsView ? (
+              <button
+                type="button"
+                className="hero-action"
+                onClick={() => openPlayground('simple')}
+              >
+                Open playground
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="hero-action"
+                  onClick={() => openPlayground('simple')}
+                >
+                  Try live demos
+                </button>
+                <button
+                  type="button"
+                  className="hero-action"
+                  onClick={openDocs}
+                >
+                  Open docs
+                </button>
+              </>
+            )}
           </div>
 
           <div className="hero-install">
@@ -155,27 +211,34 @@ export default function App() {
             <span className="hero-chip">Cross-tab sync</span>
             <span className="hero-chip">Partition + dirty mode</span>
             <span className="hero-chip">Tree-shakeable modules</span>
+            <span className="hero-chip">Dedicated docs at /docs</span>
           </div>
         </header>
 
-        <nav className="demo-nav" aria-label="Demo navigation">
-          {demos.map((demo) => (
-            <button
-              type="button"
-              key={demo.key}
-              className={`demo-nav-button ${activeDemo === demo.key ? 'active' : ''}`}
-              onClick={() => setActiveDemo(demo.key)}
-              aria-pressed={activeDemo === demo.key}
-              aria-current={activeDemo === demo.key ? 'page' : undefined}
-            >
-              {demo.label}
-            </button>
-          ))}
-        </nav>
+        {!isDocsView && (
+          <nav className="demo-nav" aria-label="Demo navigation">
+            {demos.map((demo) => (
+              <button
+                type="button"
+                key={demo.key}
+                className={`demo-nav-button ${activeDemo === demo.key ? 'active' : ''}`}
+                onClick={() => setActiveDemo(demo.key)}
+                aria-pressed={activeDemo === demo.key}
+                aria-current={activeDemo === demo.key ? 'page' : undefined}
+              >
+                {demo.label}
+              </button>
+            ))}
+          </nav>
+        )}
 
         <main id="demo-main" className="demo-main">
           <Suspense fallback={<div className="demo-fallback">Loading demo...</div>}>
-            <ActiveDemo />
+            {isDocsView ? (
+              <DocsZone onTryDemo={openPlayground} />
+            ) : (
+              <ActiveDemo />
+            )}
           </Suspense>
         </main>
 

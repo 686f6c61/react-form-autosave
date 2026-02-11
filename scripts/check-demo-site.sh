@@ -7,6 +7,7 @@ ROOT_URL="${ROOT_URL%/}"
 
 tmp_dir="$(mktemp -d)"
 html_file="$tmp_dir/index.html"
+docs_html_file="$tmp_dir/docs.html"
 asset_file="$tmp_dir/app.js"
 
 cleanup() {
@@ -36,6 +37,16 @@ if ! grep -q "<title>react-form-autosave Demo Playground</title>" "$html_file"; 
   exit 1
 fi
 
+if ! curl -fsSL --max-time 20 "$ROOT_URL/docs" -o "$docs_html_file"; then
+  echo "Could not fetch /docs route."
+  exit 1
+fi
+
+if ! grep -q "<title>react-form-autosave Demo Playground</title>" "$docs_html_file"; then
+  echo "Unexpected title in /docs HTML."
+  exit 1
+fi
+
 asset_path="$(grep -oE 'src="/assets/[^"]+\.js"' "$html_file" | head -n 1 | sed -E 's/src="([^"]+)"/\1/')"
 if [[ -z "${asset_path:-}" ]]; then
   echo "Could not find JavaScript asset path in HTML."
@@ -47,6 +58,11 @@ curl -fsSL --max-time 20 "$asset_url" -o "$asset_file"
 
 if ! grep -q "react-form-autosave" "$asset_file"; then
   echo "JavaScript asset does not contain expected package markers."
+  exit 1
+fi
+
+if ! grep -q "/docs" "$asset_file"; then
+  echo "JavaScript asset does not include dedicated docs routing."
   exit 1
 fi
 
