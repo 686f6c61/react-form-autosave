@@ -5,7 +5,7 @@
   "description": "Demo application for react-form-autosave library",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/create-docs-route.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
