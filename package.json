@@ -75,7 +75,8 @@
     "check": "npm run lint && npm run type-check && npm run test -- --runInBand && npm run build && npm run size",
     "prepublishOnly": "npm run lint && npm run type-check && npm run test -- --runInBand && npm run build && npm run size",
     "size": "size-limit",
-    "demo": "cd demo && npm run dev"
+    "demo": "cd demo && npm run dev",
+    "demo:smoke": "bash scripts/check-demo-site.sh"
   },
   "peerDependencies": {
     "react": ">=17.0.0"

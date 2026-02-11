@@ -11,6 +11,7 @@
 import React, { useState } from 'react';
 import { useFormPersist } from 'react-form-autosave';
 import { styles } from '../styles';
+import { showToast } from '../utils/toast';
 
 // Current schema (version 2)
 interface UserProfileV2 {
@@ -99,9 +100,6 @@ export function MigrationDemo() {
       version: 2,
       migrate: migrateProfile,
       merge: 'deep', // Deep merge to preserve nested structure
-      onRestore: (data) => {
-        console.log('Profile restored with migration:', data);
-      },
     }
   );
 
@@ -133,7 +131,10 @@ export function MigrationDemo() {
     };
 
     localStorage.setItem('rfp:demo-profile-migration', JSON.stringify(wrapped));
-    alert('V1 data saved! Refresh the page to see migration in action.');
+    showToast('V1 data saved. Refresh the page to test migration.', {
+      variant: 'info',
+      durationMs: 3600,
+    });
   };
 
   const handleInputChange = (field: string, value: string | boolean) => {
@@ -356,7 +357,7 @@ export function MigrationDemo() {
         <button
           style={{ ...styles.button, ...styles.buttonPrimary }}
           onClick={() => {
-            alert('Profile saved!');
+            showToast('Profile saved.', { variant: 'success' });
             actions.forceSave();
           }}
         >

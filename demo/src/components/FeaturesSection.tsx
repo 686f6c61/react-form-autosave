@@ -18,7 +18,7 @@ interface Feature {
 const features: Feature[] = [
   {
     title: 'Zero dependencies',
-    description: 'Only React as a peer dependency. No bloat, no conflicts, minimal bundle size under 2KB gzipped.',
+    description: 'Only React as a peer dependency. Optional modules are split so you only ship what you import.',
   },
   {
     title: 'useState-like API',

@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { useFormPersist, clearGroup, AutoSaveIndicator } from 'react-form-autosave';
 import { styles } from '../styles';
+import { showToast } from '../utils/toast';
 
 interface Step1Data {
   firstName: string;
@@ -53,7 +54,7 @@ export function WizardDemo() {
 
   const handleClearAll = () => {
     const cleared = clearGroup('wizard');
-    alert(`Cleared ${cleared} saved form(s)`);
+    showToast(`Cleared ${cleared} saved form(s).`, { variant: 'warning' });
     step1Actions.reset();
     step2Actions.reset();
     step3Actions.reset();
@@ -61,12 +62,18 @@ export function WizardDemo() {
   };
 
   const handleSubmit = () => {
-    alert(
-      `Wizard completed!\n\n` +
-        `Step 1: ${JSON.stringify(step1Data)}\n` +
-        `Step 2: ${JSON.stringify(step2Data)}\n` +
-        `Step 3: ${JSON.stringify(step3Data)}`
-    );
+    const summary = [
+      `${step1Data.firstName} ${step1Data.lastName}`.trim(),
+      step2Data.role || step2Data.company,
+      step3Data.interests.length ? `${step3Data.interests.length} interests` : 'No interests selected',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    showToast(`Wizard completed${summary ? `: ${summary}` : ''}.`, {
+      variant: 'success',
+      durationMs: 3600,
+    });
     handleClearAll();
   };
 

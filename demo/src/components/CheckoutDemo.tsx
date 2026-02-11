@@ -10,6 +10,7 @@
 import React from 'react';
 import { useFormPersist, AutoSaveIndicator } from 'react-form-autosave';
 import { styles } from '../styles';
+import { showToast } from '../utils/toast';
 
 interface CheckoutData {
   // Shipping info (persisted)
@@ -57,7 +58,7 @@ export function CheckoutDemo() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     actions.withClear(async () => {
-      alert('Order placed successfully!');
+      showToast('Order placed successfully.', { variant: 'success' });
     })();
   };
 

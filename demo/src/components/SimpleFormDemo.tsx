@@ -10,6 +10,7 @@
 import React from 'react';
 import { useFormPersist, AutoSaveIndicator } from 'react-form-autosave';
 import { styles } from '../styles';
+import { showToast } from '../utils/toast';
 
 interface FormData {
   name: string;
@@ -29,7 +30,6 @@ export function SimpleFormDemo() {
     initialState,
     {
       debounce: 500,
-      onRestore: (data) => console.log('Restored:', data),
     }
   );
 
@@ -41,7 +41,9 @@ export function SimpleFormDemo() {
   };
 
   const handleSubmit = actions.withClear(async () => {
-    alert(`Submitted!\n\nName: ${formData.name}\nEmail: ${formData.email}`);
+    showToast(`Submitted: ${formData.name || 'Unknown'} (${formData.email || 'no email'})`, {
+      variant: 'success',
+    });
     return true;
   });
 

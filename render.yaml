@@ -1,5 +1,5 @@
 # react-form-autosave
-# @version 0.1.0
+# @version 0.2.0
 # @author 686f6c61
 # @license MIT
 # @repository https://github.com/686f6c61/react-form-autosave
@@ -22,10 +22,13 @@ services:
     headers:
       - path: /*
         name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+      - path: /assets/*
+        name: Cache-Control
         value: public, max-age=31536000, immutable
       - path: /index.html
         name: Cache-Control
-        value: no-cache
+        value: no-cache, no-store, must-revalidate
     routes:
       - type: rewrite
         source: /*

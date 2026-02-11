@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { useFormPersist, AutoSaveIndicator, clearGroup } from 'react-form-autosave';
 import { styles } from '../styles';
+import { showToast } from '../utils/toast';
 
 interface FormData {
   name: string;
@@ -33,7 +34,7 @@ export function GDPRDemo() {
     {
       // Key feature: persistence is disabled without consent
       enabled: hasConsent,
-      debug: true,
+      debug: import.meta.env.DEV,
     }
   );
 
@@ -55,7 +56,9 @@ export function GDPRDemo() {
   const handleDeleteAllData = () => {
     // GDPR right to erasure
     const cleared = clearGroup('');
-    alert(`Deleted all persisted form data (${cleared} items)`);
+    showToast(`Deleted all persisted form data (${cleared} items).`, {
+      variant: 'warning',
+    });
   };
 
   return (
@@ -96,7 +99,7 @@ export function GDPRDemo() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          alert('Form submitted!');
+          showToast('Form submitted.', { variant: 'success' });
           actions.clear();
         }}
       >

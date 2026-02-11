@@ -10,6 +10,7 @@
 import React from 'react';
 import { useFormPersist, AutoSaveIndicator } from 'react-form-autosave';
 import { styles } from '../styles';
+import { showToast } from '../utils/toast';
 
 interface FormData {
   note: string;
@@ -31,8 +32,13 @@ export function TabSyncDemo() {
       sync: {
         enabled: true,
         strategy: 'latest-wins',
-        onSync: (data, source) => {
-          console.log(`Synced from ${source}:`, data);
+        onSync: (_data, source) => {
+          if (source === 'broadcast') {
+            showToast('Update received from another tab.', {
+              variant: 'info',
+              durationMs: 1800,
+            });
+          }
         },
       },
       debounce: 300,
@@ -47,7 +53,9 @@ export function TabSyncDemo() {
   };
 
   const openNewTab = () => {
-    window.open(window.location.href, '_blank');
+    const url = new URL(window.location.href);
+    url.searchParams.set('demo', 'sync');
+    window.open(url.toString(), '_blank', 'noopener,noreferrer');
   };
 
   return (

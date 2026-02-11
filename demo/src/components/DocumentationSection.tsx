@@ -59,7 +59,7 @@ function QuickStartContent() {
       <h3 style={{ fontSize: '16px', marginBottom: '15px' }}>Installation</h3>
       <p style={{ marginBottom: '10px', lineHeight: '1.6' }}>
         Install the package using npm or yarn. The library has zero dependencies
-        and only requires React 16.8 or higher as a peer dependency.
+        and requires React 17 or higher as a peer dependency.
       </p>
       <div style={codeBlockStyle}>
 {`npm install react-form-autosave
@@ -470,7 +470,7 @@ function App() {
       defaults={{
         debounce: 1000,
         storage: 'sessionStorage',
-        debug: process.env.NODE_ENV === 'development',
+        debug: import.meta.env.DEV,
       }}
     >
       <YourApplication />
@@ -548,18 +548,26 @@ function ModulesContent() {
 {`import { useHistory } from 'react-form-autosave/history';
 
 function FormWithHistory() {
-  const [formData, setFormData] = useFormPersist('my-form', initialData);
-  const { undo, redo, canUndo, canRedo, history, position } = useHistory(
-    formData,
-    setFormData,
-    { maxSize: 50 }
-  );
+  const {
+    state,
+    setState,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    index,
+    length,
+  } = useHistory(initialData, 50);
 
   return (
     <div>
+      <input
+        value={state.name}
+        onChange={(e) => setState({ ...state, name: e.target.value })}
+      />
       <button onClick={undo} disabled={!canUndo}>Undo</button>
       <button onClick={redo} disabled={!canRedo}>Redo</button>
-      <span>History: {position + 1} / {history.length}</span>
+      <span>History: {index + 1} / {length}</span>
     </div>
   );
 }`}
@@ -568,18 +576,28 @@ function FormWithHistory() {
       <h4 style={{ fontSize: '14px', marginBottom: '10px', marginTop: '25px' }}>Sync (cross-tab)</h4>
       <div style={codeBlockStyle}>
 {`import { useSync } from 'react-form-autosave/sync';
+import { useEffect, useState } from 'react';
 
 function SyncedForm() {
-  const [formData, setFormData] = useFormPersist('shared-form', initialData);
-  const { isLeader, connectedTabs } = useSync('shared-form', formData, setFormData, {
-    strategy: 'last-write-wins',
-    throttle: 100,
-  });
+  const [formData, setFormData] = useState(initialData);
+  const { broadcast, requestSync, broadcastClear } = useSync(
+    'rfp:shared-form',
+    { enabled: true, strategy: 'latest-wins' },
+    (incomingData) => setFormData(incomingData)
+  );
+
+  useEffect(() => {
+    requestSync();
+  }, [requestSync]);
+
+  useEffect(() => {
+    broadcast(formData);
+  }, [formData, broadcast]);
 
   return (
     <div>
-      <span>{isLeader ? 'Leader tab' : 'Follower tab'}</span>
-      <span>Connected tabs: {connectedTabs}</span>
+      <button onClick={broadcastClear}>Clear in all tabs</button>
+      <pre>{JSON.stringify(formData, null, 2)}</pre>
     </div>
   );
 }`}
@@ -593,7 +611,7 @@ function App() {
   return (
     <FormPersistProvider>
       <YourApp />
-      {process.env.NODE_ENV === 'development' && (
+      {import.meta.env.DEV && (
         <FormPersistDevTools position="bottom-right" />
       )}
     </FormPersistProvider>

@@ -11,6 +11,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFormPersist } from 'react-form-autosave';
 import { styles } from '../styles';
+import { showToast } from '../utils/toast';
 
 interface CartItem {
   name: string;
@@ -41,9 +42,6 @@ export function ExpirationDemo() {
     initialCart,
     {
       expiration: 1, // 1 minute expiration
-      onRestore: (data) => {
-        console.log('Cart restored from storage:', data);
-      },
     }
   );
 
@@ -198,7 +196,9 @@ export function ExpirationDemo() {
         <button
           style={{ ...styles.button, ...styles.buttonPrimary }}
           onClick={() => {
-            alert('Order placed! Cart will be cleared.');
+            showToast('Order placed. Cart has been cleared.', {
+              variant: 'success',
+            });
             actions.clear();
           }}
         >
@@ -239,8 +239,8 @@ export function ExpirationDemo() {
   initialCart,
   {
     expiration: 30, // Expires after 30 minutes
-    onRestore: (data) => {
-      console.log('Cart restored:', data);
+    onRestore: () => {
+      // optional callback when cart data is restored
     },
   }
 );`}
