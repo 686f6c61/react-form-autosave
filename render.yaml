@@ -5,7 +5,7 @@
 # @repository https://github.com/686f6c61/react-form-autosave
 #
 # Render deployment configuration for demo site
-# Deploy URL: https://react-form-autosave.onrender.com
+# Deploy URL: https://react-form-autosave.686f6c61.dev
 
 services:
   - type: web

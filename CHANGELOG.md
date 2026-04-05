@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.1] - 2026-04-06
+
+### Changed
+
+- Migrated demo URL from Render to self-hosted infrastructure (react-form-autosave.686f6c61.dev)
+
 ## [0.2.0] - 2026-02-11
 
 ### Added

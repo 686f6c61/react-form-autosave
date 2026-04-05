@@ -1,6 +1,6 @@
 {
   "name": "react-form-autosave",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Zero-dependency React library for automatically persisting form state to localStorage/sessionStorage with SSR support, tab sync, undo/redo, and GDPR compliance",
   "author": "686f6c61",
   "license": "MIT",
@@ -11,7 +11,7 @@
   "bugs": {
     "url": "https://github.com/686f6c61/react-form-autosave/issues"
   },
-  "homepage": "https://react-form-autosave.onrender.com",
+  "homepage": "https://react-form-autosave.686f6c61.dev",
   "keywords": [
     "react",
     "form",
